@@ -1,0 +1,108 @@
+# Load modules
+import glob
+import os
+import subprocess
+import pdb
+
+
+# Get the date
+from datetime import datetime
+i = datetime.now()
+TIME = i.strftime('%Y-%m-%d')
+
+# Specify config file
+configfile: "workflow/config.yml"
+
+# Parse config.yml file
+VCF = config['vcfs']['1000g']
+POPKEY = config['pop_key']
+NSTATS = config['nucleotide_stats']
+HSTATS = config['haplotype_stats']
+REFPOP = config['reference_pop']
+QUERY = config['query_pops']
+CHROMS = VCF.keys()
+VENV = config['python_virtual_env']
+WSIZE = config['window_size']
+GMAP = config['genetic_map']
+
+if QUERY == 'all':
+    POPS = []
+    with open(POPKEY, 'r') as pop_file:
+        for i, line in enumerate(pop_file):
+            pop = line.strip().split("\t")[3]
+            if i != 0 and pop != '':
+                POPS.append(pop)
+    POPS = list(set(POPS))
+else:
+    POPS = QUERY.split(",")
+
+# Make subdirectories
+if not os.path.exists("data"):
+    os.mkdir("data")
+if not os.path.exists("nucleotide_stats"):
+    os.mkdir("nucleotide_stats")
+if not os.path.exists("haplotype_stats"):
+    os.mkdir("haplotype_stats")
+if not os.path.exists("accessory"):
+    os.mkdir("accessory")
+if not os.path.exists("OandE"):
+    os.mkdir("OandE")
+
+localrules: all, concatenate_results, clean
+
+rule all:
+    input:
+        expand(f"data/ZarrFile/{{chrom}}/GT/0.0.0", chrom=CHROMS),
+        expand(f"nucleotide_stats/{{pop}}.chr{{chrom}}.nwn.{{metric1}}.csv", pop=POPS, chrom=CHROMS, metric1=NSTATS['within_pop'].split(",")),
+        expand(f"nucleotide_stats/{{pop}}.chr{{chrom}}.nbn.{{metric2}}.csv", pop=POPS, chrom=CHROMS, metric2=NSTATS['between_pop'].split(",")),
+        expand(f"haplotype_stats/{{pop}}.chr{{chrom}}.hwn.{{metric3}}.csv", pop=POPS, chrom=CHROMS, metric3=HSTATS['within_pop'].split(",")),
+        expand(f"haplotype_stats/{{pop}}.chr{{chrom}}.hbn.{{metric4}}.csv", pop=POPS, chrom=CHROMS, metric4=HSTATS['between_pop'].split(",")),
+        "AllPops.AllStats.csv"
+
+rule clean:
+    shell:
+        "rm data/*; rm nucleotide_stats/*; rm haplotype_stats/*; rm accessory/*; rm OandE/*"
+
+rule convert_vcf_to_zarr:
+    input:
+        vcf=lambda wildcards: VCF[wildcards.chrom]
+    output: "data/ZarrFile/{chrom}/GT/0.0.0"
+    shell: f"source activate {VENV}; python scripts/convert_vcf.py -vcf {{input.vcf}} -name {{wildcards.chrom}} -out data/ZarrFile"
+
+rule calculate_within_population_nucleotide_stats:
+    input: "data/ZarrFile/{chrom}/GT/0.0.0"
+    output: f"nucleotide_stats/{{pop}}.chr{{chrom}}.nwn.{{metric1}}.csv"
+    shell: f"source activate {VENV}; python scripts/NucStats.py -z data/ZarrFile -p {{wildcards.pop}} -p2 None -c {{wildcards.chrom}} -s {{wildcards.metric1}} -w {WSIZE} -o {{output}}"
+
+rule calculate_between_population_nucleotide_stats:
+    input: "data/ZarrFile/{chrom}/GT/0.0.0"
+    output: f"nucleotide_stats/{{pop}}.chr{{chrom}}.nbn.{{metric2}}.csv"
+    shell: f"source activate {VENV}; python scripts/NucStats.py -z data/ZarrFile -p {{wildcards.pop}} -p2 {REFPOP} -c {{wildcards.chrom}} -s {{wildcards.metric2}} -w {WSIZE} -o {{output}}"
+
+rule make_polarization_key:
+    output: "accessory/polarization_key"
+    shell: f"source activate {VENV}; python scripts/polarization_key.py -i data/ZarrFile -o accessory/polarization_key"
+
+rule calculate_within_population_haplotype_stats:
+    input: "data/ZarrFile/{chrom}/GT/0.0.0",
+           "accessory/polarization_key"
+    output: f"haplotype_stats/{{pop}}.chr{{chrom}}.hwn.{{metric3}}.csv"
+    shell: f"source activate {VENV}; python scripts/HapStats.py -z data/ZarrFile -p {{wildcards.pop}} -p2 None -c {{wildcards.chrom}} -s {{wildcards.metric3}} -w {WSIZE} -o {{output}} -P {{input[1]}} -m {GMAP} --standardize"
+
+rule calculate_between_population_haplotype_stats:
+    input: "data/ZarrFile/{chrom}/GT/0.0.0",
+           "accessory/polarization_key"
+    output: f"haplotype_stats/{{pop}}.chr{{chrom}}.hbn.{{metric4}}.csv"
+    shell: f"source activate {VENV}; python scripts/HapStats.py -z data/ZarrFile -p {{wildcards.pop}} -p2 {REFPOP} -c {{wildcards.chrom}} -s {{wildcards.metric4}} -w {WSIZE} -o {{output}} -P {{input[1]}} -m {GMAP} --standardize"
+
+rule concatenate_results:
+    input: f"haplotype_stats/{{pop}}.chr{{chrom}}.hwn.{{metric3}}.csv",
+           f"haplotype_stats/{{pop}}.chr{{chrom}}.hbn.{{metric4}}.csv",
+           f"nucleotide_stats/{{pop}}.chr{{chrom}}.nbn.{{metric2}}.csv",
+           f"nucleotide_stats/{{pop}}.chr{{chrom}}.nwn.{{metric1}}.csv"
+    output: "AllPops.AllStats.csv"
+    run:
+        shell: "for f in ./nucleotide_stats/*hwn*.csv; do head -n 1 $f > header.csv; done"
+        shell: "for f in ./nucleotide_stats/*csv; do tail -n +2 $f >> tmp.csv; done"
+        shell: "for f in ./haplotype_stats/*csv; do tail -n +2 $f >> tmp.csv; done"
+        shell: "cat header.csv tmp.csv > AllPops.AllStats.csv; rm header.csv; rm tmp.csv"
