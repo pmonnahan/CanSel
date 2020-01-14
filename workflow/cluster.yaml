@@ -9,13 +9,13 @@ __default__:
   o: 'OandE/{rule}.{wildcards}.out'
   e: 'OandE/{rule}.{wildcards}.err'
 
-phase:
+convert_vcf:
   queue: small
-  l: 'nodes=1:ppn=6,walltime=12:00:00,mem=16gb'
+  l: 'nodes=1:ppn=1,walltime=24:00:00,mem=4gb'
 
-infer_ancestry:
+make_polarization_key:
   queue: small
-  l: 'nodes=1:ppn=12,walltime=48:00:00,mem=32gb'
+  l: 'nodes=1:ppn=1,walltime=24:00:00,mem=4gb'
 
 make_hap_beds:
   queue: small

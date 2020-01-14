@@ -50,13 +50,16 @@ if not os.path.exists("OandE"):
 
 localrules: all, concatenate_results, clean
 
+CONDA = f'source /panfs/roc/msisoft/anaconda/anaconda3-2018.12/bin/activate; conda activate {VENV}; export PATH=$PATH:/panfs/roc/msisoft/anaconda/anaconda3-2018.12/bin/'
+
 rule all:
     input:
-        expand(f"data/ZarrFile/{{chrom}}/GT/0.0.0", chrom=CHROMS),
+        expand(f"data/ZarrFile/{{chrom}}/calldata/GT/0.0.0", chrom=CHROMS),
         expand(f"nucleotide_stats/{{pop}}.chr{{chrom}}.nwn.{{metric1}}.csv", pop=POPS, chrom=CHROMS, metric1=NSTATS['within_pop'].split(",")),
         expand(f"nucleotide_stats/{{pop}}.chr{{chrom}}.nbn.{{metric2}}.csv", pop=POPS, chrom=CHROMS, metric2=NSTATS['between_pop'].split(",")),
         expand(f"haplotype_stats/{{pop}}.chr{{chrom}}.hwn.{{metric3}}.csv", pop=POPS, chrom=CHROMS, metric3=HSTATS['within_pop'].split(",")),
         expand(f"haplotype_stats/{{pop}}.chr{{chrom}}.hbn.{{metric4}}.csv", pop=POPS, chrom=CHROMS, metric4=HSTATS['between_pop'].split(",")),
+        expand(f"accessory/polarization_key.chr{{chrom}}", chrom=CHROMS),
         "AllPops.AllStats.csv"
 
 rule clean:
@@ -66,40 +69,41 @@ rule clean:
 rule convert_vcf_to_zarr:
     input:
         vcf=lambda wildcards: VCF[wildcards.chrom]
-    output: "data/ZarrFile/{chrom}/GT/0.0.0"
-    shell: f"source activate {VENV}; python scripts/convert_vcf.py -vcf {{input.vcf}} -name {{wildcards.chrom}} -out data/ZarrFile"
+    output: "data/ZarrFile/{chrom}/calldata/GT/0.0.0"
+    shell: f"{CONDA}; python scripts/convert_vcf.py -vcf {{input.vcf}} -name {{wildcards.chrom}} -o data/ZarrFile"
 
 rule calculate_within_population_nucleotide_stats:
-    input: "data/ZarrFile/{chrom}/GT/0.0.0"
+    input: "data/ZarrFile/{chrom}/calldata/GT/0.0.0"
     output: f"nucleotide_stats/{{pop}}.chr{{chrom}}.nwn.{{metric1}}.csv"
-    shell: f"source activate {VENV}; python scripts/NucStats.py -z data/ZarrFile -p {{wildcards.pop}} -p2 None -c {{wildcards.chrom}} -s {{wildcards.metric1}} -w {WSIZE} -o {{output}}"
+    shell: f"{CONDA}; python scripts/NucStats.py -z data/ZarrFile -p {{wildcards.pop}} -p2 None -k {POPKEY} -c {{wildcards.chrom}} -s {{wildcards.metric1}} -w {WSIZE} -o {{output}}"
 
 rule calculate_between_population_nucleotide_stats:
-    input: "data/ZarrFile/{chrom}/GT/0.0.0"
+    input: "data/ZarrFile/{chrom}/calldata/GT/0.0.0"
     output: f"nucleotide_stats/{{pop}}.chr{{chrom}}.nbn.{{metric2}}.csv"
-    shell: f"source activate {VENV}; python scripts/NucStats.py -z data/ZarrFile -p {{wildcards.pop}} -p2 {REFPOP} -c {{wildcards.chrom}} -s {{wildcards.metric2}} -w {WSIZE} -o {{output}}"
+    shell: f"{CONDA}; python scripts/NucStats.py -z data/ZarrFile -p {{wildcards.pop}} -p2 {REFPOP} -k {POPKEY} -c {{wildcards.chrom}} -s {{wildcards.metric2}} -w {WSIZE} -o {{output}}"
 
 rule make_polarization_key:
-    output: "accessory/polarization_key"
-    shell: f"source activate {VENV}; python scripts/polarization_key.py -i data/ZarrFile -o accessory/polarization_key"
+    output: f"accessory/polarization_key.chr{{chrom}}"
+    shell: f"{CONDA}; python scripts/polarization_key.py -i data/ZarrFile -o accessory/polarization_key.chr{{wildcards.chrom}} -c {{wildcards.chrom}}"
 
 rule calculate_within_population_haplotype_stats:
-    input: "data/ZarrFile/{chrom}/GT/0.0.0",
-           "accessory/polarization_key"
+    input: "data/ZarrFile/{chrom}/calldata/GT/0.0.0",
+           f"accessory/polarization_key.chr{{chrom}}"
     output: f"haplotype_stats/{{pop}}.chr{{chrom}}.hwn.{{metric3}}.csv"
-    shell: f"source activate {VENV}; python scripts/HapStats.py -z data/ZarrFile -p {{wildcards.pop}} -p2 None -c {{wildcards.chrom}} -s {{wildcards.metric3}} -w {WSIZE} -o {{output}} -P {{input[1]}} -m {GMAP} --standardize"
+    shell: f"{CONDA}; python scripts/HapStats.py -z data/ZarrFile -p {{wildcards.pop}} -p2 None -k {POPKEY} -c {{wildcards.chrom}} -s {{wildcards.metric3}} -w {WSIZE} -o {{output}} -P {{input[1]}} -m {GMAP} --standardize"
 
 rule calculate_between_population_haplotype_stats:
-    input: "data/ZarrFile/{chrom}/GT/0.0.0",
-           "accessory/polarization_key"
+    input: "data/ZarrFile/{chrom}/calldata/GT/0.0.0",
+           f"accessory/polarization_key.chr{{chrom}}"
     output: f"haplotype_stats/{{pop}}.chr{{chrom}}.hbn.{{metric4}}.csv"
-    shell: f"source activate {VENV}; python scripts/HapStats.py -z data/ZarrFile -p {{wildcards.pop}} -p2 {REFPOP} -c {{wildcards.chrom}} -s {{wildcards.metric4}} -w {WSIZE} -o {{output}} -P {{input[1]}} -m {GMAP} --standardize"
+    shell: f"{CONDA}; python scripts/HapStats.py -z data/ZarrFile -p {{wildcards.pop}} -p2 {REFPOP} -k {POPKEY} -c {{wildcards.chrom}} -s {{wildcards.metric4}} -w {WSIZE} -o {{output}} -P {{input[1]}} -m {GMAP} --standardize"
 
 rule concatenate_results:
-    input: f"haplotype_stats/{{pop}}.chr{{chrom}}.hwn.{{metric3}}.csv",
-           f"haplotype_stats/{{pop}}.chr{{chrom}}.hbn.{{metric4}}.csv",
-           f"nucleotide_stats/{{pop}}.chr{{chrom}}.nbn.{{metric2}}.csv",
-           f"nucleotide_stats/{{pop}}.chr{{chrom}}.nwn.{{metric1}}.csv"
+    input:
+        expand(f"nucleotide_stats/{{pop}}.chr{{chrom}}.nwn.{{metric1}}.csv", pop=POPS, chrom=CHROMS, metric1=NSTATS['within_pop'].split(",")),
+        expand(f"nucleotide_stats/{{pop}}.chr{{chrom}}.nbn.{{metric2}}.csv", pop=POPS, chrom=CHROMS, metric2=NSTATS['between_pop'].split(",")),
+        expand(f"haplotype_stats/{{pop}}.chr{{chrom}}.hwn.{{metric3}}.csv", pop=POPS, chrom=CHROMS, metric3=HSTATS['within_pop'].split(",")),
+        expand(f"haplotype_stats/{{pop}}.chr{{chrom}}.hbn.{{metric4}}.csv", pop=POPS, chrom=CHROMS, metric4=HSTATS['between_pop'].split(",")),
     output: "AllPops.AllStats.csv"
     run:
         shell: "for f in ./nucleotide_stats/*hwn*.csv; do head -n 1 $f > header.csv; done"

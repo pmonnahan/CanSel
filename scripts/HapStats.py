@@ -162,7 +162,7 @@ if __name__ == "__main__":
     df_list = []
 
     for chrom in chroms:
-        pdb.set_trace()
+        # pdb.set_trace()
         if any(k in args.s for k in ['xpehh', 'xpnSL']) and args.p2 != "None":
             gt2, pos = get_hapdata(args.z, chrom, loc2_samples)
         var_IDs = callset[chrom]['variants/ID']

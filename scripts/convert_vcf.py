@@ -30,6 +30,6 @@ if __name__ == "__main__":
 
     if not os.path.exists(outdir): os.mkdir(outdir)
 
-    print("compressing chromosome " + chrom)
-    allel.vcf_to_zarr(vcf, zarr_file, group=str(chrom), fields='*', overwrite=overwrite)
-    print("done compressing chromosome " + chrom)
+    print("compressing chromosome " + args.name)
+    allel.vcf_to_zarr(args.vcf, args.o, group=str(args.name), fields='*', overwrite=True)
+    print("done compressing chromosome " + args.name)

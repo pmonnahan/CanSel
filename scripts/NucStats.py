@@ -46,6 +46,17 @@ def get_ACdata(zarr_folder, chrom, samples, start=-9, stop=-9):
 
     return ac, pos, start, stop
 
+def get_biallelic(zarr_folder, chrom, samples):
+    callset = zarr.open_group(zarr_folder, mode='r')
+
+    gt = allel.GenotypeDaskArray(callset[str(chrom)]['calldata']['GT'])  # Retrieve genotype data
+    gt = gt.take(samples, axis=1).compute()  # subset data to samples of interest
+
+    ac = gt.count_alleles()
+    sites = ac.is_biallelic_01()[:]
+
+    return sites
+
 
 
 # Set up command line execution
@@ -104,12 +115,16 @@ if __name__ == "__main__":
     df_list = []
 
     for chrom in chroms:
-        pdb.set_trace()
-        if any(k in args.s for k in ['dxy', 'FD', 'Fst_Hud', 'Fst_Pat']) and args.p2 != "None":
-            ac2, pos, start, stop = get_ACdata(args.z, chrom, loc2_samples)
+        # pdb.set_trace()
         for pop in pops:
             loc_samples = df[df.Population_code == pop].callset_index.values
             ac, pos, start, stop = get_ACdata(args.z, chrom, loc_samples)
+            if any(k in args.s for k in ['dxy', 'FD', 'Fst_Hud', 'Fst_Pat']) and args.p2 != "None":
+                ac2, pos, start, stop = get_ACdata(args.z, chrom, loc2_samples)
+                biallelic = get_biallelic(args.z, chrom, np.concatenate((loc_samples, loc2_samples), axis=0))
+                ac = ac.compress(biallelic, axis=0)[:, :2]
+                ac2 = ac2.compress(biallelic, axis=0)[:, :2]
+                pos = pos.get_mask_selection(biallelic)
             if 'pi' in args.s:
                 pi, windows, n_bases, counts = allel.windowed_diversity(
                     pos, ac, size=winsize, start=start, stop=stop, step=winsize / 2)
