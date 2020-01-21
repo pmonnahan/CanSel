@@ -84,6 +84,11 @@ if __name__ == "__main__":
     parser.add_argument('-o', type=str, metavar='output', required=True, help='')
     args = parser.parse_args()
 
+    if args.s == 'all':
+        args.s = ['dxy', 'FD', 'Fst_Hud', 'Fst_Pat', 'pi', 'tajD']
+    else:
+        args.s = args.s.split(",")
+
     if args.c == 'all':
         chroms = [str(x) for x in range(1, 23)] + ['X', 'Y']
     else:
@@ -125,6 +130,10 @@ if __name__ == "__main__":
                 ac = ac.compress(biallelic, axis=0)[:, :2]
                 ac2 = ac2.compress(biallelic, axis=0)[:, :2]
                 pos = pos.get_mask_selection(biallelic)
+            else:
+                biallelic = get_biallelic(args.z, chrom, loc_samples)
+                ac = ac.compress(biallelic, axis=0)[:, :2]
+                pos = pos.get_mask_selection(biallelic)
             if 'pi' in args.s:
                 pi, windows, n_bases, counts = allel.windowed_diversity(
                     pos, ac, size=winsize, start=start, stop=stop, step=winsize / 2)
@@ -154,27 +163,6 @@ if __name__ == "__main__":
                 Fst_Pat, windows, counts = allel.windowed_patterson_fst(pos, ac, ac2, size=winsize, start=start,
                                                                         stop=stop, step=winsize / 2)
                 new_dat = format_results(stat=Fst_Pat, stat_name="Fst_Pat", chrom=chrom, windows=windows, pop=pop)
-                df_list.append(new_dat)
-
-            if any(k in args.s for k in ['iHS', 'nSL']):
-                gt, pos = get_hapdata(args.z, chrom, loc_samples)
-                if args.P == 'true':
-                    polarize = polarizeHapStat(args.z, chrom)
-                else:
-                    polarize = [1 for j in callset[chrom]['variants']['POS']]
-            if 'iHS' in args.s:
-                ihs, pos = calciHS(gt, pos, args.m)
-                ihs = [x * j for x, j in zip(ihs, polarize)]
-                new_dat = pd.DataFrame(
-                    {'pop': [pop for x in range(0, len(ihs))], 'chrom': [chrom for x in range(0, len(ihs))],
-                     'start': pos, 'stop': pos, 'variable': ['iHS' for x in range(0, len(ihs))], 'value': ihs})
-                df_list.append(new_dat)
-            if 'nSL' in args.s:
-                nsl, pos = calcnSL(args.z, loc_samples, chrom)
-                nsl = [x * j for x, j in zip(nsl, polarize)]
-                new_dat = pd.DataFrame(
-                    {'pop': [pop for x in range(0, len(nsl))], 'chrom': [chrom for x in range(0, len(nsl))],
-                     'start': pos, 'stop': pos, 'variable': ['nsl' for x in range(0, len(nsl))], 'value': nsl})
                 df_list.append(new_dat)
 
     if df_list:

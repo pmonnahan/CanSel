@@ -17,12 +17,11 @@ import os
 import pdb
 import zarr
 import pickle
-import line_profiler
+# import line_profiler
 
 # Define Functions
 # @profile
 def polarizeHapStat(zarr_folder, chrom, capitalize=True, remove_missing_aa=True):
-    # TODO: add polarization of iHS results by flipping sign when ref is derived. What do "-" and "." mean!?!?!
     # These take far too long to create de novo each time.  Should make once and
     callset = zarr.open_group(zarr_folder, mode='r')
     AA = callset[chrom]['variants']['AA'][...]
@@ -37,7 +36,6 @@ def polarizeHapStat(zarr_folder, chrom, capitalize=True, remove_missing_aa=True)
         aa = aa.split("|")[0]
         alleles = ['A', 'G', 'C', 'T']
         id = IDS[j]
-        # pdb.set_trace()
         if aa == '.' or aa == '':
             polarize[id] = 0
             counts[0] += 1
@@ -73,6 +71,9 @@ def polarizeHapStat(zarr_folder, chrom, capitalize=True, remove_missing_aa=True)
             else:
                 polarize[id] = 0
                 counts[0] += 1
+        else:
+            polarize[id] = 0
+            counts[0] += 1
     print "Found " + str(counts[0]) + " variants to be converted to missing."
     print "Found " + str(counts[1]) + " variants to be polarized"
     print "Found " + str(counts[2]) + " variants to be unchanged"
