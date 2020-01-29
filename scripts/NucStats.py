@@ -113,6 +113,9 @@ if __name__ == "__main__":
     if args.p2 != "None":
         try:
             loc2_samples = df[df.Population_code == args.p2].callset_index.values
+            if len(loc2_samples) == 0:
+                print("No samples found in VCF for reference pop " + args.p2)
+                args.p2 = "None"
         except IndexError:
             print("Did not find population " + args.p2 + " in popKey file.")
             args.p2 = "None"
@@ -123,13 +126,20 @@ if __name__ == "__main__":
         # pdb.set_trace()
         for pop in pops:
             loc_samples = df[df.Population_code == pop].callset_index.values
+            if len(loc_samples) == 0:
+                print("No samples found in VCF for pop " + pop)
+                break
             ac, pos, start, stop = get_ACdata(args.z, chrom, loc_samples)
             if any(k in args.s for k in ['dxy', 'FD', 'Fst_Hud', 'Fst_Pat']) and args.p2 != "None":
-                ac2, pos, start, stop = get_ACdata(args.z, chrom, loc2_samples)
-                biallelic = get_biallelic(args.z, chrom, np.concatenate((loc_samples, loc2_samples), axis=0))
-                ac = ac.compress(biallelic, axis=0)[:, :2]
-                ac2 = ac2.compress(biallelic, axis=0)[:, :2]
-                pos = pos.get_mask_selection(biallelic)
+                if pop == args.p2:
+                    print("Must specify two different populations for between population metrics")
+                    break
+                else:
+                    ac2, pos, start, stop = get_ACdata(args.z, chrom, loc2_samples)
+                    biallelic = get_biallelic(args.z, chrom, np.concatenate((loc_samples, loc2_samples), axis=0))
+                    ac = ac.compress(biallelic, axis=0)[:, :2]
+                    ac2 = ac2.compress(biallelic, axis=0)[:, :2]
+                    pos = pos.get_mask_selection(biallelic)
             else:
                 biallelic = get_biallelic(args.z, chrom, loc_samples)
                 ac = ac.compress(biallelic, axis=0)[:, :2]
@@ -169,7 +179,6 @@ if __name__ == "__main__":
         results = pd.concat(df_list)
         results.to_csv(args.o)
     else:
-        print "no results to write"
-
-
-
+        print("no results to write")
+        oo = open(args.o, 'w')  # Create empty output file for snakemake bookkeeping
+        oo.close()

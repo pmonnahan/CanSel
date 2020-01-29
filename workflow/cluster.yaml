@@ -11,17 +11,24 @@ __default__:
 
 convert_vcf:
   queue: small
-  l: 'nodes=1:ppn=1,walltime=24:00:00,mem=4gb'
+  l: 'walltime=24:00:00,mem=4gb'
 
 make_polarization_key:
   queue: small
-  l: 'nodes=1:ppn=1,walltime=24:00:00,mem=4gb'
+  l: 'walltime=24:00:00,mem=4gb'
 
-make_hap_beds:
+calculate_within_population_nucleotide_stats:
   queue: small
-  l: 'nodes=1:ppn=1,walltime=00:30:00,mem=3gb'
+  l: 'walltime=02:00:00,mem=8gb'
 
-plot_karyograms:
+calculate_between_population_nucleotide_stats:
   queue: small
-  l: 'nodes=1:ppn=1,walltime=00:30:00,mem=3gb'
+  l: 'walltime=02:00:00,mem=8gb'
 
+calculate_within_population_haplotype_stats:
+  queue: small
+  l: 'walltime=02:00:00,mem=8gb'
+
+calculate_between_population_haplotype_stats:
+  queue: small
+  l: 'walltime=02:00:00,mem=8gb'

@@ -19,6 +19,7 @@ import pandas as pd
 import zarr
 import numpy as np
 import pickle
+from math import isnan
 import scipy
 
 
@@ -51,13 +52,15 @@ def get_biallelic(zarr_folder, chrom, samples, min_maf = 0.01):
 
 def format_results(stat, stat_name, chrom, pos, pop, polarization_key, ac="None", n_bins=20):
 
-    stat = [x * j for x, j in zip(stat.tolist(), polarization_key)]
-    pdb.set_trace()
-    if ac != "None":  # This is breaking xpehh...produces all nan...problem is in call to binned_statistic which returns nan and -Inf for mean value in bins
+    stat = [x * j for x, j in zip(stat.tolist(), polarization_key) if j != 0]  # Polarization will set stat values to 0 if ancestral allele is unknown
+    pos = [x for x, j in zip(pos.tolist(), polarization_key) if j != 0]  # These 0 sites need to be removed from all arrays because they crash standardization
+    if ac != "None":
+        flt = np.array([True if x != 0 else False for x in polarization_key])
+        ac = ac.compress(flt, axis=0)
         stat, bins = allel.standardize_by_allele_count(stat, ac[:, 1], n_bins=n_bins, diagnostics=False)
         stat_name += ".std"
-    # pdb.set_trace()
-    #Getting here
+    pos = [y for x, y in zip(stat.tolist(), pos) if not isnan(x)]
+    stat = [x for x in stat.tolist() if not isnan(x)]
     new_dat = pd.DataFrame(
         {'pop': [pop for x in range(0, len(stat))], 'chrom': [chrom for x in range(0, len(stat))],
          'start': pos, 'stop': pos, 'variable': [stat_name for x in range(0, len(stat))], 'value': stat})
@@ -91,7 +94,7 @@ def calcXPEHH(gt, gt2, pos, map_file, map_cols=['chrom', 'bp', 'cM'], map_sep=r"
         new_map = np.interp(pos, map.bp, map.cM)
         h1 = gt.to_haplotypes()
         h2 = gt2.to_haplotypes()
-        xpehh = allel.xpehh(h1, h2, pos, map_pos=new_map, min_ehh=0.1, include_edges=True, gap_scale=20000, max_gap=200000, is_accessible=None, use_threads=True)
+        xpehh = allel.xpehh(h1, h2, pos, map_pos=new_map, min_ehh=0.05, include_edges=True, gap_scale=20000, max_gap=200000, is_accessible=None, use_threads=True)
 
     return xpehh
 
@@ -148,9 +151,9 @@ if __name__ == "__main__":
         else:
             pol_key = pickle.load(open(args.P, 'rb'))
 
-    df = pd.read_csv(args.k, sep="\t", header=0) # Read in population key file
-    df = df[df['Sample_name'].isin(samples)] # Remove samples from pop key that are not in VCF data
-    if not np.all(samples == df['Sample_name'].values): # Check that order of samples is same in VCF and pop key
+    df = pd.read_csv(args.k, sep="\t", header=0)  # Read in population key file
+    df = df[df['Sample_name'].isin(samples)]  # Remove samples from pop key that are not in VCF data
+    if not np.all(samples == df['Sample_name'].values):  # Check that order of samples is same in VCF and pop key
         samples_list = list(samples)
         samples_callset_index = [samples_list.index(s) for s in df['Sample_name']]
         df['callset_index'] = samples_callset_index
@@ -162,9 +165,13 @@ if __name__ == "__main__":
     if args.p2 != "None":
         try:
             loc2_samples = df[df.Population_code == args.p2].callset_index.values
+            if len(loc2_samples) == 0:
+                print("No samples found in VCF for reference pop " + args.p2)
+                args.p2 = "None"
         except IndexError:
             print("Did not find population " + args.p2 + " in popKey file.")
             args.p2 = "None"
+
 
     df_list = []
     # pdb.set_trace()
@@ -173,13 +180,19 @@ if __name__ == "__main__":
 
         for pop in pops:
             loc_samples = df[df.Population_code == pop].callset_index.values
-
+            if len(loc_samples) == 0:
+                print("No samples found in VCF for pop " + pop)
+                break
             var_IDs = callset[chrom]['variants/ID']
             if any(k in args.s for k in ['xpehh', 'xpnSL']) and args.p2 != "None":
-                biallelic = get_biallelic(args.z, chrom, np.concatenate((loc_samples, loc2_samples), axis=0))
-                gt, pos = get_hapdata(args.z, chrom, loc_samples, biallelic)
-                gt2, pos = get_hapdata(args.z, chrom, loc2_samples, biallelic)
-                var_IDs = var_IDs.get_mask_selection(biallelic)
+                if pop == args.p2:
+                    print("Must specify two different populations for between population metrics")
+                    break
+                else:
+                    biallelic = get_biallelic(args.z, chrom, np.concatenate((loc_samples, loc2_samples), axis=0))
+                    gt, pos = get_hapdata(args.z, chrom, loc_samples, biallelic)
+                    gt2, pos = get_hapdata(args.z, chrom, loc2_samples, biallelic)
+                    var_IDs = var_IDs.get_mask_selection(biallelic)
             else:
                 biallelic = get_biallelic(args.z, chrom, loc_samples)
                 gt, pos = get_hapdata(args.z, chrom, loc_samples, biallelic)
@@ -223,4 +236,6 @@ if __name__ == "__main__":
         results = pd.concat(df_list)
         results.to_csv(args.o)
     else:
-        print "no results to write"
+        print("no results to write")
+        oo = open(args.o, 'w')  # Create empty output file for snakemake bookkeeping
+        oo.close()
