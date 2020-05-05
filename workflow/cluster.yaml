@@ -1,34 +1,35 @@
 #Modify lines indicated with MODIFY
 __default__:
-  queue: small
+  queue: mangi
   A: 'spectorl'
   M: 'pmonnaha@umn.edu' #MODIFY
-  l: 'nodes=1:ppn=1,walltime=4:00:00,pmem=2500mb'
+  walltime: '4:00:00'
+  mem: '4gb'
   m: 'a'
   r: 'n'
   o: 'OandE/{rule}.{wildcards}.out'
   e: 'OandE/{rule}.{wildcards}.err'
 
 convert_vcf:
-  queue: small
-  l: 'walltime=24:00:00,mem=4gb'
+  walltime: '24:00:00'
+  mem: '4gb'
 
 make_polarization_key:
-  queue: small
-  l: 'walltime=24:00:00,mem=4gb'
+  walltime: '24:00:00'
+  mem: '4gb'
 
 calculate_within_population_nucleotide_stats:
-  queue: small
-  l: 'walltime=02:00:00,mem=8gb'
+  walltime: '02:00:00'
+  mem: '8gb'
 
 calculate_between_population_nucleotide_stats:
-  queue: small
-  l: 'walltime=02:00:00,mem=8gb'
+  walltime: '02:00:00'
+  mem: '8gb'
 
 calculate_within_population_haplotype_stats:
-  queue: small
-  l: 'walltime=02:00:00,mem=8gb'
+  walltime: '02:00:00'
+  mem: '8gb'
 
 calculate_between_population_haplotype_stats:
-  queue: small
-  l: 'walltime=02:00:00,mem=8gb'
+  walltime: '02:00:00'
+  mem: '8gb'

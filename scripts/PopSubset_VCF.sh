@@ -2,9 +2,9 @@
 
 SCRIPT=`basename $0`
 # Ensure that arguments are passed to script, if not display help
-if [ "$#" -ne 5 ]; then
+if [ "$#" -ne 6 ]; then
 cat << EOF
-Usage: sh ${SCRIPT} vcf_dir pop_file pop_prefix out_dir
+Usage: sh ${SCRIPT} vcf_dir pop_file pop_prefix out_dir cores downsample_num.  Parameters must be passed in this order
 
 All arguments are required and must follow correct order.
 
@@ -17,6 +17,8 @@ pop_prefix: population prefix in the pop_file to be subset
 out_dir: Directory where the subsetted VCFs will be output
 
 cores: Number of processors to use for parallelization
+
+downsample_num: Number of individuals to downsample each population to.  Set to -9 to shut off downsampling
 
 EOF
   exit 1
@@ -50,12 +52,18 @@ PFILE="$2"
 POP="$3"
 OUT="$4"
 THREADS="$5"
+DS="$6"
 
 #New file containing just the sample IDs for the population of interest
-SFILE=${OUT}/${POP}.txt
+SFILE=$(mktemp ${OUT}/SAMPS.XXXXXXXXX)
 
 #Retrieve sample IDs for this population
-grep -w ${POP} ${PFILE} | awk '{print $1}' > ${SFILE}
+if [ "$DS" -ne "-9" ]; then 
+  grep -w ${POP} ${PFILE} | awk '{print $1}' | shuf -n $DS > ${SFILE}
+else
+  grep -w ${POP} ${PFILE} | awk '{print $1}' > ${SFILE}
+fi
+
 
 POP_SUBSET() {
   module load bcftools/1.9
@@ -68,8 +76,10 @@ POP_SUBSET() {
   POP=$4
 
   BS=$(basename ${IN})
-  DUPS=${IN}.dups.txt
-  zgrep -v "#" $IN | awk '{print $3}' | uniq -d > $DUPS
+
+  DUPS=$(mktemp ${OUT}/dups.XXXXXXXXX)
+
+  zgrep -v "#" $IN | awk '{print $3}' | sort | uniq -d > $DUPS
   bcftools view --force-samples -S ${SFILE} -Oz -o ${OUT}/${BS%.vcf.gz}.${POP}.vcf.gz ${IN} &&
   tabix -p vcf ${OUT}/${BS%.vcf.gz}.${POP}.vcf.gz;
   #Make additional file that is filtered to only contain SNPs where ancestral state has been labelled

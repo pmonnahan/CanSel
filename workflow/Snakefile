@@ -106,7 +106,11 @@ rule concatenate_results:
         expand(f"haplotype_stats/{{pop}}.chr{{chrom}}.hbn.{{metric4}}.csv", pop=POPS, chrom=CHROMS, metric4=HSTATS['between_pop'].split(",")),
     output: "AllPops.AllStats.csv"
     run:
-        shell: "for f in ./nucleotide_stats/*hwn*.csv; do head -n 1 $f > header.csv; done"
-        shell: "for f in ./nucleotide_stats/*csv; do tail -n +2 $f >> tmp.csv; done"
-        shell: "for f in ./haplotype_stats/*csv; do tail -n +2 $f >> tmp.csv; done"
-        shell: "cat header.csv tmp.csv > AllPops.AllStats.csv; rm header.csv; rm tmp.csv"
+        shell("for f in nucleotide_stats/*nwn*.csv; do head -n 1 $f > header.csv; done")
+        shell("for f in nucleotide_stats/*csv; do tail -n +2 $f >> tmp.csv; done")
+        shell("for f in haplotype_stats/*csv; do tail -n +2 $f >> tmp.csv; done")
+        shell("cat header.csv tmp.csv > AllPops.AllStats.csv")
+        shell("for f in {{1..22}}; do tail -n +2 nucleotide_stats/*chr${{f}}.*csv | grep -v nucleotide >> tmp${{f}}.csv; done")
+        shell("for f in {{1..22}}; do tail -n +2 haplotype_stats/*chr${{f}}.*csv | grep -v haplotype >> tmp${{f}}.csv; done")
+        shell("for f in {{1..22}}; do cat header.csv tmp${{f}}.csv > AllPops.chr${{f}}.csv; done; rm header.csv; rm tmp*csv")
+

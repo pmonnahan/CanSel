@@ -22,6 +22,7 @@ import pickle
 from math import isnan
 import scipy
 
+# TODO: COMMENT!!
 
 def get_hapdata(zarr_folder, chrom, samples, biallelic_sites):
     callset = zarr.open_group(zarr_folder, mode='r')

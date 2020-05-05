@@ -19,6 +19,8 @@ import pandas as pd
 import zarr
 import numpy as np
 
+# TODO: COMMENT!!
+
 # Define Functions
 def format_results(stat, stat_name, chrom, windows, pop):
 
