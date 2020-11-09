@@ -2,6 +2,9 @@
 Automating calculation of numerous population-genetic metrics within and across populations.  Input is a set of VCF files (separated by chromosome) and a population key (e.g. _accessory/igsry_samples.txt_).  Data is compressed/converted into 'zarr' format (https://zarr.readthedocs.io), which allows for efficient access of very large datasets (e.g. 1000 Genomes).  Sliding-window calculation of metrics is accomplished via scikit-allel.  The entire workflow is automated and configured for computation on an HPC system via Snakemake.
 
 ## Requirements
+
+Assumes indels have been removed from VCF
+
 #### Anaconda
 
 If on cluster do,

@@ -14,6 +14,7 @@ import allel
 import subprocess
 import argparse
 import os
+os.environ["NUMEXPR_MAX_THREADS"]="272"
 import pdb
 import pandas as pd
 import zarr
@@ -22,14 +23,12 @@ import numpy as np
 # TODO: COMMENT!!
 
 # Define Functions
-def format_results(stat, stat_name, chrom, windows, pop):
-
-
+def format_results(stat, stat_name, chrom, windows, nvar, pop):
     starts = np.take(windows, 0, axis=1)
     stops = np.take(windows, 1, axis=1)
     new_dat = pd.DataFrame(
         {'pop': [pop for x in range(0, len(stat))], 'chrom': [chrom for x in range(0, len(stat))],
-         'start': starts, 'stop': stops, 'variable': [stat_name for x in range(0, len(stat))], 'value': stat})
+         'start': starts, 'stop': stops, 'nvar': nvar, 'variable': [stat_name for x in range(0, len(stat))], 'value': stat})
     return new_dat
 
 
@@ -87,7 +86,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.s == 'all':
-        args.s = ['dxy', 'FD', 'Fst_Hud', 'Fst_Pat', 'pi', 'tajD']
+        args.s = ['dxy', 'FD', 'Fst_Hud', 'Fst_Pat', 'pi', 'thetaW', 'tajD']
     else:
         args.s = args.s.split(",")
 
@@ -146,35 +145,52 @@ if __name__ == "__main__":
                 biallelic = get_biallelic(args.z, chrom, loc_samples)
                 ac = ac.compress(biallelic, axis=0)[:, :2]
                 pos = pos.get_mask_selection(biallelic)
+
+
             if 'pi' in args.s:
                 pi, windows, n_bases, counts = allel.windowed_diversity(
-                    pos, ac, size=winsize, start=start, stop=stop, step=winsize / 2)
-                new_dat = format_results(stat=pi, stat_name="pi", chrom=chrom, windows=windows, pop=pop)
+                    pos, ac, size=winsize, start=start, stop=stop, step=int(winsize / 2))
+                new_dat = format_results(stat=pi, stat_name="pi", chrom=chrom, windows=windows, nvar=counts, pop=pop)
+                df_list.append(new_dat)
+            if 'thetaW' in args.s:
+                thetaW, windows, n_bases, counts = allel.windowed_watterson_theta(
+                    pos, ac, size=winsize, start=start, stop=stop, step=int(winsize / 2))
+                new_dat = format_results(stat=thetaW, stat_name="thetaW", chrom=chrom, windows=windows, nvar=counts, pop=pop)
                 df_list.append(new_dat)
             if 'tajD' in args.s:
                 tajD, windows, counts = allel.windowed_tajima_d(
-                    pos, ac, size=winsize, start=start, stop=stop, step=winsize / 2)
-                new_dat = format_results(stat=tajD, stat_name="tajD", chrom=chrom, windows=windows, pop=pop)
+                    pos, ac, size=winsize, start=start, stop=stop, step=int(winsize / 2))
+                new_dat = format_results(stat=tajD, stat_name="tajD", chrom=chrom, windows=windows, nvar=counts, pop=pop)
                 df_list.append(new_dat)
             if 'dxy' in args.s and args.p2 != "None":
                 dxy, windows, n_bases, counts = allel.windowed_divergence(
-                    pos, ac, ac2, size=winsize, start=start, stop=stop, step=winsize / 2)
-                new_dat = format_results(stat=dxy, stat_name="dxy", chrom=chrom, windows=windows, pop=pop)
+                    pos, ac, ac2, size=winsize, start=start, stop=stop, step=int(winsize / 2))
+                new_dat = format_results(stat=dxy, stat_name="dxy", chrom=chrom, windows=windows, nvar=counts, pop=pop)
                 df_list.append(new_dat)
             if 'FD' in args.s and args.p2 != "None":
                 FD, windows, n_bases, counts = allel.windowed_df(pos, ac, ac2, size=winsize, start=start, stop=stop,
-                                                                 step=winsize / 2)
-                new_dat = format_results(stat=FD, stat_name="FD", chrom=chrom, windows=windows, pop=pop)
+                                                                 step=int(winsize / 2))
+                new_dat = format_results(stat=FD, stat_name="FD", chrom=chrom, windows=windows, nvar=counts, pop=pop)
                 df_list.append(new_dat)
             if 'Fst_Hud' in args.s and args.p2 != "None":
                 Fst_Hud, windows, counts = allel.windowed_hudson_fst(pos, ac, ac2, size=winsize, start=start,
-                                                                     stop=stop, step=winsize / 2)
-                new_dat = format_results(stat=Fst_Hud, stat_name="Fst_Hud", chrom=chrom, windows=windows, pop=pop)
+                                                                     stop=stop, step=int(winsize / 2))
+                new_dat = format_results(stat=Fst_Hud, stat_name="Fst_Hud", chrom=chrom, windows=windows, nvar=counts, pop=pop)
                 df_list.append(new_dat)
             if 'Fst_Pat' in args.s and args.p2 != "None":
                 Fst_Pat, windows, counts = allel.windowed_patterson_fst(pos, ac, ac2, size=winsize, start=start,
-                                                                        stop=stop, step=winsize / 2)
-                new_dat = format_results(stat=Fst_Pat, stat_name="Fst_Pat", chrom=chrom, windows=windows, pop=pop)
+                                                                        stop=stop, step=int(winsize / 2))
+                new_dat = format_results(stat=Fst_Pat, stat_name="Fst_Pat", chrom=chrom, windows=windows, nvar=counts, pop=pop)
+                df_list.append(new_dat)
+            if 'r2' in args.s:
+                #pdb.set_trace()
+                ct = allel.GenotypeDaskArray(callset[str(chrom)]['calldata']['GT'])
+                ct = ct.take(loc_samples, axis=1).compute()
+                ct = ct.compress(biallelic, axis=0)
+                ct = ct.to_n_alt(fill=-1)
+                r2, windows, counts = allel.windowed_r_squared(pos, ct, size=winsize, start=start, stop=stop, step=int(winsize / 2), fill=-9)
+                new_dat = format_results(stat=r2, stat_name="r2", chrom=chrom, windows=windows, nvar=counts,
+                                         pop=pop)
                 df_list.append(new_dat)
 
     if df_list:

@@ -60,18 +60,24 @@ rule all:
         expand(f"haplotype_stats/{{pop}}.chr{{chrom}}.hwn.{{metric3}}.csv", pop=POPS, chrom=CHROMS, metric3=HSTATS['within_pop'].split(",")),
         expand(f"haplotype_stats/{{pop}}.chr{{chrom}}.hbn.{{metric4}}.csv", pop=POPS, chrom=CHROMS, metric4=HSTATS['between_pop'].split(",")),
         expand(f"accessory/polarization_key.chr{{chrom}}", chrom=CHROMS),
-        "AllPops.AllStats.csv"
+        "AllPops.NucStats.csv.gz", "AllPops.HapStats.csv.gz"
 
 rule clean:
     shell:
         "rm data/*; rm nucleotide_stats/*; rm haplotype_stats/*; rm accessory/*; rm OandE/*"
 
-rule convert_vcf_to_zarr:
-    input:
-        vcf=lambda wildcards: VCF[wildcards.chrom]
-    output: "data/ZarrFile/{chrom}/calldata/GT/0.0.0"
-    shell: f"{CONDA}; python scripts/convert_vcf.py -vcf {{input.vcf}} -name {{wildcards.chrom}} -o data/ZarrFile"
+rule remove_indels:
+    input: vcf=lambda wildcards: VCF[wildcards.chrom]
+    output: "data/chrom{chrom}.vcf.gz"
+    shell:
+        f"module load bcftools; bcftools view --types snps {{input.vcf}} | bcftools norm -d -Oz -o data/chrom{{wildcards.chrom}}.vcf.gz"
 
+rule convert_vcf_to_zarr:
+    input: "data/chrom{chrom}.vcf.gz"
+    output: "data/ZarrFile/{chrom}/calldata/GT/0.0.0"
+    shell: f"{CONDA}; python scripts/convert_vcf.py -vcf {{input}} -name {{wildcards.chrom}} -o data/ZarrFile"
+
+#TODO: add SNP numbers for nstat windows
 rule calculate_within_population_nucleotide_stats:
     input: "data/ZarrFile/{chrom}/calldata/GT/0.0.0"
     output: f"nucleotide_stats/{{pop}}.chr{{chrom}}.nwn.{{metric1}}.csv"
@@ -83,6 +89,7 @@ rule calculate_between_population_nucleotide_stats:
     shell: f"{CONDA}; python scripts/NucStats.py -z data/ZarrFile -p {{wildcards.pop}} -p2 {REFPOP} -k {POPKEY} -c {{wildcards.chrom}} -s {{wildcards.metric2}} -w {WSIZE} -o {{output}}"
 
 rule make_polarization_key:
+    input: "data/ZarrFile/{chrom}/calldata/GT/0.0.0"
     output: f"accessory/polarization_key.chr{{chrom}}"
     shell: f"{CONDA}; python scripts/polarization_key.py -i data/ZarrFile -o accessory/polarization_key.chr{{wildcards.chrom}} -c {{wildcards.chrom}}"
 
@@ -90,13 +97,13 @@ rule calculate_within_population_haplotype_stats:
     input: "data/ZarrFile/{chrom}/calldata/GT/0.0.0",
            f"accessory/polarization_key.chr{{chrom}}"
     output: f"haplotype_stats/{{pop}}.chr{{chrom}}.hwn.{{metric3}}.csv"
-    shell: f"{CONDA}; python scripts/HapStats.py -z data/ZarrFile -p {{wildcards.pop}} -p2 None -k {POPKEY} -c {{wildcards.chrom}} -s {{wildcards.metric3}} -w {WSIZE} -o {{output}} -P {{input[1]}} -m {GMAP} --standardize"
+    shell: f"{CONDA}; python scripts/HapStats.py -z data/ZarrFile -p {{wildcards.pop}} -p2 None -k {POPKEY} -c {{wildcards.chrom}} -s {{wildcards.metric3}} -o {{output}} -P {{input[1]}} -m {GMAP} --standardize"
 
 rule calculate_between_population_haplotype_stats:
     input: "data/ZarrFile/{chrom}/calldata/GT/0.0.0",
            f"accessory/polarization_key.chr{{chrom}}"
     output: f"haplotype_stats/{{pop}}.chr{{chrom}}.hbn.{{metric4}}.csv"
-    shell: f"{CONDA}; python scripts/HapStats.py -z data/ZarrFile -p {{wildcards.pop}} -p2 {REFPOP} -k {POPKEY} -c {{wildcards.chrom}} -s {{wildcards.metric4}} -w {WSIZE} -o {{output}} -P {{input[1]}} -m {GMAP} --standardize"
+    shell: f"{CONDA}; python scripts/HapStats.py -z data/ZarrFile -p {{wildcards.pop}} -p2 {REFPOP} -k {POPKEY} -c {{wildcards.chrom}} -s {{wildcards.metric4}} -o {{output}} -P {{input[1]}} -m {GMAP} --standardize"
 
 rule concatenate_results:
     input:
@@ -104,13 +111,42 @@ rule concatenate_results:
         expand(f"nucleotide_stats/{{pop}}.chr{{chrom}}.nbn.{{metric2}}.csv", pop=POPS, chrom=CHROMS, metric2=NSTATS['between_pop'].split(",")),
         expand(f"haplotype_stats/{{pop}}.chr{{chrom}}.hwn.{{metric3}}.csv", pop=POPS, chrom=CHROMS, metric3=HSTATS['within_pop'].split(",")),
         expand(f"haplotype_stats/{{pop}}.chr{{chrom}}.hbn.{{metric4}}.csv", pop=POPS, chrom=CHROMS, metric4=HSTATS['between_pop'].split(",")),
-    output: "AllPops.AllStats.csv"
+    output: "AllPops.NucStats.csv.gz", "AllPops.HapStats.csv.gz"
     run:
         shell("for f in nucleotide_stats/*nwn*.csv; do head -n 1 $f > header.csv; done")
+        shell("for f in haplotype_stats/*hwn*.csv; do head -n 1 $f > header2.csv; done")
         shell("for f in nucleotide_stats/*csv; do tail -n +2 $f >> tmp.csv; done")
-        shell("for f in haplotype_stats/*csv; do tail -n +2 $f >> tmp.csv; done")
-        shell("cat header.csv tmp.csv > AllPops.AllStats.csv")
-        shell("for f in {{1..22}}; do tail -n +2 nucleotide_stats/*chr${{f}}.*csv | grep -v nucleotide >> tmp${{f}}.csv; done")
-        shell("for f in {{1..22}}; do tail -n +2 haplotype_stats/*chr${{f}}.*csv | grep -v haplotype >> tmp${{f}}.csv; done")
-        shell("for f in {{1..22}}; do cat header.csv tmp${{f}}.csv > AllPops.chr${{f}}.csv; done; rm header.csv; rm tmp*csv")
+        shell("for f in haplotype_stats/*csv; do tail -n +2 $f >> tmp2.csv; done")
+        shell("cat header.csv tmp.csv | gzip > AllPops.NucStats.csv.gz")
+        shell("cat header2.csv tmp2.csv | gzip > AllPops.HapStats.csv.gz")
+        shell("for f in {{1..22}}; do tail -n +2 nucleotide_stats/*chr${{f}}.*csv | grep -v nucleotide >> tmp${{f}}.nuc.csv; done")
+        shell("for f in {{1..22}}; do tail -n +2 haplotype_stats/*chr${{f}}.*csv | grep -v haplotype >> tmp${{f}}.hap.csv; done")
+        shell("for f in {{1..22}}; do cat header.csv tmp${{f}}.nuc.csv | gzip  > AllPops.chr${{f}}.nuc.csv.gz; done; rm header.csv; rm tmp*.nuc.csv")
+        shell("for f in {{1..22}}; do cat header2.csv tmp${{f}}.hap.csv | gzip > AllPops.chr${{f}}.hap.csv.gz; done; rm header2.csv; rm tmp*.hap.csv")
 
+# rule make_db:
+#     input:
+#         expand(f"nucleotide_stats/{{pop}}.chr{{chrom}}.nwn.{{metric1}}.csv", pop=POPS, chrom=CHROMS, metric1=NSTATS['within_pop'].split(",")),
+#         expand(f"nucleotide_stats/{{pop}}.chr{{chrom}}.nbn.{{metric2}}.csv", pop=POPS, chrom=CHROMS, metric2=NSTATS['between_pop'].split(",")),
+#         expand(f"haplotype_stats/{{pop}}.chr{{chrom}}.hwn.{{metric3}}.csv", pop=POPS, chrom=CHROMS, metric3=HSTATS['within_pop'].split(",")),
+#         expand(f"haplotype_stats/{{pop}}.chr{{chrom}}.hbn.{{metric4}}.csv", pop=POPS, chrom=CHROMS, metric4=HSTATS['between_pop'].split(",")),
+#     output: "cansel.db"
+#     run:
+#         for file in input:
+#             if "nucleotide" in file:
+
+# rule simulate_nulls:
+# #     input:
+
+rule extract_singletons:
+    input: "data/ZarrFile/{chrom}/calldata/GT/0.0.0"
+    output: f"haplotype_stats/{{pop}}.chr{{chrom}}.SDS.csv"
+    shell: ''
+
+#g = allel.GenotypeChunkedArray(callset[chrom]['calldata']['genotype'])
+## the '[:]' syntax pulls the data from compressed storage into a numpy array
+#ac = g.count_alleles()[:] #differs for zarr array
+#Count singletons
+#np.count_nonzero((ac.max_allele() == 1) & ac.is_singleton(1))
+#flt = ac.is_singleton(1)
+#gf = g.compress(flt, axis=0)

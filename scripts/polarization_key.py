@@ -74,9 +74,9 @@ def polarizeHapStat(zarr_folder, chrom, capitalize=True, remove_missing_aa=True)
         else:
             polarize[id] = 0
             counts[0] += 1
-    print "Found " + str(counts[0]) + " variants to be converted to missing."
-    print "Found " + str(counts[1]) + " variants to be polarized"
-    print "Found " + str(counts[2]) + " variants to be unchanged"
+    print("Found " + str(counts[0]) + " variants to be converted to missing.")
+    print("Found " + str(counts[1]) + " variants to be polarized")
+    print("Found " + str(counts[2]) + " variants to be unchanged")
     return(polarize)
 
 # Set up command line execution

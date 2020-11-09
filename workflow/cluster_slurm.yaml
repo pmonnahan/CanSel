@@ -1,0 +1,49 @@
+#Modify lines indicated with MODIFY
+__default__:
+  A: 'pmonnaha' #MODIFY.  This should be name of your account with your HPC system
+  p: 'ccgg'
+  job-name: "{rule}"
+  time: "4:00:00"
+  mem-per-cpu: "5G"
+  ntasks: "1"
+  nodes: "1"
+  mail-user: "pmonnaha@umn.edu"
+  mail-type: "NONE"
+  o: 'OandE/{rule}.{wildcards}.out'
+  e: 'OandE/{rule}.{wildcards}.err'
+
+convert_vcf:
+  time: '24:00:00'
+  mem-per-cpu: '4gb'
+  ntasks: "1"
+  nodes: "1"
+
+make_polarization_key:
+  time: '24:00:00'
+  mem-per-cpu: '4gb'
+  ntasks: "1"
+  nodes: "1"
+
+calculate_within_population_nucleotide_stats:
+  time: '24:00:00'
+  mem-per-cpu: '4gb'
+  ntasks: "1"
+  nodes: "1"
+
+calculate_between_population_nucleotide_stats:
+  time: '02:00:00'
+  mem-per-cpu: '8gb'
+  ntasks: "1"
+  nodes: "1"
+
+calculate_within_population_haplotype_stats:
+  time: '02:00:00'
+  mem-per-cpu: '8gb'
+  ntasks: "1"
+  nodes: "1"
+
+calculate_between_population_haplotype_stats:
+  time: '02:00:00'
+  mem-per-cpu: '8gb'
+  ntasks: "1"
+  nodes: "1"

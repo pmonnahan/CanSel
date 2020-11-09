@@ -27,13 +27,13 @@ vcfs:
 #    Y: "/home/pankrat2/public/bin/ref/1000G_v5/ALL.chrY.phase3_integrated_v2a.20130502.genotypes.vcf.gz"
 pop_key: "/home/pmonnaha/pmonnaha/misc/igsr_samples.tsv"
 nucleotide_stats:
-  within_pop: "pi,tajD"
+  within_pop: "pi,tajD,thetaW,r2"
   between_pop: "dxy,FD,Fst_Hud,Fst_Pat"
 haplotype_stats:
   within_pop: "iHS,nSL"
   between_pop: "xpehh,xpnSL"
 query_pops: "all"
 reference_pop: "CEU"
-python_virtual_env: "py27"
+python_virtual_env: "py36"
 window_size: "50000"
 genetic_map: "/home/pmonnaha/pmonnaha/accessory/genetic_map_hg19.txt"
