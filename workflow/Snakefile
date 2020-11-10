@@ -37,16 +37,9 @@ else:
     POPS = QUERY.split(",")
 
 # Make subdirectories
-if not os.path.exists("data"):
-    os.mkdir("data")
-if not os.path.exists("nucleotide_stats"):
-    os.mkdir("nucleotide_stats")
-if not os.path.exists("haplotype_stats"):
-    os.mkdir("haplotype_stats")
-if not os.path.exists("accessory"):
-    os.mkdir("accessory")
-if not os.path.exists("OandE"):
-    os.mkdir("OandE")
+directories = ["data","nucleotide_stats","haplotype_stats","accessory","OandE","multilocus_stats"]
+for dir in directories:
+    if not os.path.exists(dir): os.mkdir(dir)
 
 localrules: all, concatenate_results, clean
 
@@ -70,7 +63,7 @@ rule remove_indels:
     input: vcf=lambda wildcards: VCF[wildcards.chrom]
     output: "data/chrom{chrom}.vcf.gz"
     shell:
-        f"module load bcftools; bcftools view --types snps {{input.vcf}} | bcftools norm -d -Oz -o data/chrom{{wildcards.chrom}}.vcf.gz"
+        f"module load bcftools; bcftools view --types snps {{input.vcf}} | bcftools norm -m + | bcftools view --max-alleles 2 -Oz -o data/chrom{{wildcards.chrom}}.vcf.gz"
 
 rule convert_vcf_to_zarr:
     input: "data/chrom{chrom}.vcf.gz"
@@ -139,9 +132,9 @@ rule concatenate_results:
 # #     input:
 
 rule extract_singletons:
-    input: "data/ZarrFile/{chrom}/calldata/GT/0.0.0"
-    output: f"haplotype_stats/{{pop}}.chr{{chrom}}.SDS.csv"
-    shell: ''
+    input: "data/ZarrFile/{chrom}/calldata/GT/0.0.0", f"accessory/polarization_key.chr{{chrom}}"
+    output: f"multilocus_stats/{{pop}}.chr{{chrom}}.SDS.csv"
+    shell: f"{CONDA}; python scripts/extract_SDS_input.py -z data/ZarrFile -p {{wildcards.pop}} -k {POPKEY} -c {{wildcards.chrom}} -P {{input[1]}} -o {{output}}"
 
 #g = allel.GenotypeChunkedArray(callset[chrom]['calldata']['genotype'])
 ## the '[:]' syntax pulls the data from compressed storage into a numpy array
