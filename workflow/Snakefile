@@ -29,7 +29,7 @@ if QUERY == 'all':
     POPS = []
     with open(POPKEY, 'r') as pop_file:
         for i, line in enumerate(pop_file):
-            pop = line.strip().split("\t")[3]
+            pop = line.strip().split()[1]
             if i != 0 and pop != '':
                 POPS.append(pop)
     POPS = list(set(POPS))
@@ -52,6 +52,7 @@ rule all:
         expand(f"nucleotide_stats/{{pop}}.chr{{chrom}}.nbn.{{metric2}}.csv", pop=POPS, chrom=CHROMS, metric2=NSTATS['between_pop'].split(",")),
         expand(f"haplotype_stats/{{pop}}.chr{{chrom}}.hwn.{{metric3}}.csv", pop=POPS, chrom=CHROMS, metric3=HSTATS['within_pop'].split(",")),
         expand(f"haplotype_stats/{{pop}}.chr{{chrom}}.hbn.{{metric4}}.csv", pop=POPS, chrom=CHROMS, metric4=HSTATS['between_pop'].split(",")),
+        expand(f"multilocus_stats/{{pop}}.chr{{chrom}}.SDS.out", pop=POPS, chrom=CHROMS),
         expand(f"accessory/polarization_key.chr{{chrom}}", chrom=CHROMS),
         "AllPops.NucStats.csv.gz", "AllPops.HapStats.csv.gz"
 
@@ -59,11 +60,11 @@ rule clean:
     shell:
         "rm data/*; rm nucleotide_stats/*; rm haplotype_stats/*; rm accessory/*; rm OandE/*"
 
-rule remove_indels:
+rule filter_input:
     input: vcf=lambda wildcards: VCF[wildcards.chrom]
     output: "data/chrom{chrom}.vcf.gz"
     shell:
-        f"module load bcftools; bcftools view --types snps {{input.vcf}} | bcftools norm -m + | bcftools view --max-alleles 2 -Oz -o data/chrom{{wildcards.chrom}}.vcf.gz"
+        f"module load bcftools; zcat {{input.vcf}} | cut -f 3 | sort | uniq -d | uniq > accessory/dup_vars{{wildcards.chrom}}.txt; bcftools view --types snps {{input.vcf}} -e \"F_MISSING>{config['input_filters']['missingness']}\" | bcftools norm -d all -m + | bcftools view --exclude \"ID==@accessory/dup_vars{{wildcards.chrom}}.txt\" --max-alleles 2 -Oz -o data/chrom{{wildcards.chrom}}.vcf.gz"
 
 rule convert_vcf_to_zarr:
     input: "data/chrom{chrom}.vcf.gz"
@@ -84,7 +85,7 @@ rule calculate_between_population_nucleotide_stats:
 rule make_polarization_key:
     input: "data/ZarrFile/{chrom}/calldata/GT/0.0.0"
     output: f"accessory/polarization_key.chr{{chrom}}"
-    shell: f"{CONDA}; python scripts/polarization_key.py -i data/ZarrFile -o accessory/polarization_key.chr{{wildcards.chrom}} -c {{wildcards.chrom}}"
+    shell: f"{CONDA}; python scripts/polarization_key.py -i data/ZarrFile -o accessory/polarization_key.chr{{wildcards.chrom}} -c {{wildcards.chrom}} -a {config['vcfs']['AA_spec']}"
 
 rule calculate_within_population_haplotype_stats:
     input: "data/ZarrFile/{chrom}/calldata/GT/0.0.0",
@@ -132,14 +133,26 @@ rule concatenate_results:
 # #     input:
 
 rule extract_singletons:
-    input: "data/ZarrFile/{chrom}/calldata/GT/0.0.0", f"accessory/polarization_key.chr{{chrom}}"
-    output: f"multilocus_stats/{{pop}}.chr{{chrom}}.SDS.csv"
-    shell: f"{CONDA}; python scripts/extract_SDS_input.py -z data/ZarrFile -p {{wildcards.pop}} -k {POPKEY} -c {{wildcards.chrom}} -P {{input[1]}} -o {{output}}"
+    input: f"data/ZarrFile/{{chrom}}/calldata/GT/0.0.0", f"accessory/polarization_key.chr{{chrom}}"
+    output: f"multilocus_stats/{{pop}}.chr{{chrom}}.SDS.sings.gz", f"multilocus_stats/{{pop}}.chr{{chrom}}.SDS.snps.gz"
+    shell: f"{CONDA}; python scripts/extract_SDS_input.py -z data/ZarrFile -p {{wildcards.pop}} -k {POPKEY} -c {{wildcards.chrom}} -P {{input[1]}} -o multilocus_stats/{{wildcards.pop}}.chr{{wildcards.chrom}}.SDS;"
+            f"gzip multilocus_stats/{{wildcards.pop}}.chr{{wildcards.chrom}}.SDS.sings; gzip multilocus_stats/{{wildcards.pop}}.chr{{wildcards.chrom}}.SDS.snps"
 
-#g = allel.GenotypeChunkedArray(callset[chrom]['calldata']['genotype'])
-## the '[:]' syntax pulls the data from compressed storage into a numpy array
-#ac = g.count_alleles()[:] #differs for zarr array
-#Count singletons
-#np.count_nonzero((ac.max_allele() == 1) & ac.is_singleton(1))
-#flt = ac.is_singleton(1)
-#gf = g.compress(flt, axis=0)
+rule calcSDS:
+    input: f"multilocus_stats/{{pop}}.chr{{chrom}}.SDS.sings.gz", f"multilocus_stats/{{pop}}.chr{{chrom}}.SDS.snps.gz"
+    output: f"multilocus_stats/{{pop}}.chr{{chrom}}.SDS.out"
+    params: pre = f"multilocus_stats/{{pop}}.chr{{chrom}}.SDS"
+    run:
+        for gamma in config['SDS']['gamma_shapes'].keys():
+            if wildcards.pop in config['SDS']['gamma_shapes'][gamma]['pops']:
+                gamma_file = config['SDS']['gamma_shapes'][gamma]['path']
+                init = config['SDS']['gamma_shapes'][gamma]['init']
+        if gamma_file:
+            shell(f"{CONDA}; {config['SDS']['exec']} {{params.pre}}.sings.gz {{params.pre}}.snps.gz {{params.pre}}.obs {{params.pre}}.bound {gamma_file} {init} > {{output}}")
+        else:
+            print(f"Did not find gamma shapes path for population: {{wildcards.pop}}")
+
+rule callSDS:
+    input: expand(f"multilocus_stats/{{pop}}.chr{{chrom}}.SDS.out", pop=POPS, chrom=CHROMS)
+    output: ".SDS.txt"
+    shell: "touch ./.SDS.txt"

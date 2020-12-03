@@ -21,10 +21,10 @@ import pickle
 
 # Define Functions
 # @profile
-def polarizeHapStat(zarr_folder, chrom, capitalize=True, remove_missing_aa=True):
+def polarizeHapStat(zarr_folder, chrom, aa_spec, capitalize=True, remove_missing_aa=True):
     # These take far too long to create de novo each time.  Should make once and
     callset = zarr.open_group(zarr_folder, mode='r')
-    AA = callset[chrom]['variants']['AA'][...]
+    AA = callset[chrom]['variants'][aa_spec][...]
     REF = callset[chrom]['variants']['REF'][...]
     IDS = callset[chrom]['variants']['ID'][...]
 
@@ -86,13 +86,14 @@ if __name__ == "__main__":
     parser.add_argument('--use_lower_case', help='include lower case (less certain) ancestral allele calls ',
                         default=False, action="store_true")
     parser.add_argument('-o', type=str, metavar='output', required=True, help='')
+    parser.add_argument('-a', type=str, metavar='AA_spec', default="AA", help='INFO label that indicates ancestral allele in the VCFs')
     parser.add_argument('-c', type=str, metavar='chromosome', default="22", help='')
     args = parser.parse_args()
 
     if args.c == 'all':
         for chrom in [x for x in range(1,23)] + ['X', 'Y']:
-            pol_key = polarizeHapStat(args.i, chrom, capitalize=args.use_lower_case)
+            pol_key = polarizeHapStat(args.i, chrom, args.a, capitalize=args.use_lower_case)
             pickle.dump(pol_key, open(args.o, 'wb'))
     else:
-        pol_key = polarizeHapStat(args.i, args.c, capitalize=args.use_lower_case)
+        pol_key = polarizeHapStat(args.i, args.c, args.a, capitalize=args.use_lower_case)
         pickle.dump(pol_key, open(args.o, 'wb'))

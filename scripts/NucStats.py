@@ -14,7 +14,7 @@ import allel
 import subprocess
 import argparse
 import os
-os.environ["NUMEXPR_MAX_THREADS"]=272
+os.environ["NUMEXPR_MAX_THREADS"]="272"
 import pdb
 import pandas as pd
 import zarr

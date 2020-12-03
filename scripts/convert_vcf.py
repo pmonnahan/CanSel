@@ -17,6 +17,7 @@ import os
 import pdb
 import zarr
 import shutil
+os.environ["NUMEXPR_MAX_THREADS"]="272"
 
 # Set up command line execution
 if __name__ == "__main__":
