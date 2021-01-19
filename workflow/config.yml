@@ -28,7 +28,7 @@ vcfs:
   AA_spec: "AA_chimp" #What is the INFO label that indicates ancestral allele in the VCFs.  This will be used for polarizing haplotype stats.
 input_filters:
   missingness: "0.1"
-pop_key: "/home/pmonnaha/pmonnaha/misc/igsr_samples.tsv"
+pop_key: "/home/spectorl/pmonnaha/misc/h1kgp_samps.txt"
 nucleotide_stats:
   within_pop: "pi,tajD,thetaW,r2"
   between_pop: "dxy,FD,Fst_Hud,Fst_Pat"
@@ -39,9 +39,10 @@ query_pops: "all"
 reference_pop: "CEU"
 python_virtual_env: "py36"
 window_size: "50000"
-genetic_map: "/home/pmonnaha/pmonnaha/misc/genetic_map_hg19.txt"
+genetic_map: "/home/pmonnaha/pmonnaha/misc/genetic_map_hg38.txt"
 SDS:
   exec: "/home/spectorl/pmonnaha/software/SDS/compute_SDS.R"
+  batch_size: '100000'
   gamma_shapes:
     AFR:
       path: "/home/spectorl/pmonnaha/software/SDS/gamma_shapes.Gravel_AFR.n100"

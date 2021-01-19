@@ -36,6 +36,10 @@ if QUERY == 'all':
 else:
     POPS = QUERY.split(",")
 
+SDS_POPS = []
+for spop in config['SDS']['gamma_shapes'].keys():
+    SDS_POPS += config['SDS']['gamma_shapes'][spop]['pops'].strip().split(",")
+
 # Make subdirectories
 directories = ["data","nucleotide_stats","haplotype_stats","accessory","OandE","multilocus_stats"]
 for dir in directories:
@@ -45,14 +49,17 @@ localrules: all, concatenate_results, clean
 
 CONDA = f'source /panfs/roc/msisoft/anaconda/anaconda3-2018.12/bin/activate; conda activate {VENV}; export PATH=$PATH:/panfs/roc/msisoft/anaconda/anaconda3-2018.12/bin/'
 
+def get_SDS_input(wildcards):
+    in_files = glob.glob("multilocus_stats/*")
+
 rule all:
     input:
         expand(f"data/ZarrFile/{{chrom}}/calldata/GT/0.0.0", chrom=CHROMS),
-        expand(f"nucleotide_stats/{{pop}}.chr{{chrom}}.nwn.{{metric1}}.csv", pop=POPS, chrom=CHROMS, metric1=NSTATS['within_pop'].split(",")),
-        expand(f"nucleotide_stats/{{pop}}.chr{{chrom}}.nbn.{{metric2}}.csv", pop=POPS, chrom=CHROMS, metric2=NSTATS['between_pop'].split(",")),
-        expand(f"haplotype_stats/{{pop}}.chr{{chrom}}.hwn.{{metric3}}.csv", pop=POPS, chrom=CHROMS, metric3=HSTATS['within_pop'].split(",")),
-        expand(f"haplotype_stats/{{pop}}.chr{{chrom}}.hbn.{{metric4}}.csv", pop=POPS, chrom=CHROMS, metric4=HSTATS['between_pop'].split(",")),
-        expand(f"multilocus_stats/{{pop}}.chr{{chrom}}.SDS.out", pop=POPS, chrom=CHROMS),
+        expand(f"nucleotide_stats/{{Pop}}.chr{{chrom}}.nwn.{{metric1}}.csv", Pop=POPS, chrom=CHROMS, metric1=NSTATS['within_pop'].split(",")),
+        expand(f"nucleotide_stats/{{Pop}}.chr{{chrom}}.nbn.{{metric2}}.csv", Pop=POPS, chrom=CHROMS, metric2=NSTATS['between_pop'].split(",")),
+        expand(f"haplotype_stats/{{Pop}}.chr{{chrom}}.hwn.{{metric3}}.csv", Pop=POPS, chrom=CHROMS, metric3=HSTATS['within_pop'].split(",")),
+        expand(f"haplotype_stats/{{Pop}}.chr{{chrom}}.hbn.{{metric4}}.csv", Pop=POPS, chrom=CHROMS, metric4=HSTATS['between_pop'].split(",")),
+        expand(f"multilocus_stats/{{Pop}}.chr{{chrom}}.SDS.out", Pop=SDS_POPS, chrom=CHROMS),
         expand(f"accessory/polarization_key.chr{{chrom}}", chrom=CHROMS),
         "AllPops.NucStats.csv.gz", "AllPops.HapStats.csv.gz"
 
@@ -74,13 +81,13 @@ rule convert_vcf_to_zarr:
 #TODO: add SNP numbers for nstat windows
 rule calculate_within_population_nucleotide_stats:
     input: "data/ZarrFile/{chrom}/calldata/GT/0.0.0"
-    output: f"nucleotide_stats/{{pop}}.chr{{chrom}}.nwn.{{metric1}}.csv"
-    shell: f"{CONDA}; python scripts/NucStats.py -z data/ZarrFile -p {{wildcards.pop}} -p2 None -k {POPKEY} -c {{wildcards.chrom}} -s {{wildcards.metric1}} -w {WSIZE} -o {{output}}"
+    output: f"nucleotide_stats/{{Pop}}.chr{{chrom}}.nwn.{{metric1}}.csv"
+    shell: f"{CONDA}; python scripts/NucStats.py -z data/ZarrFile -p {{wildcards.Pop}} -p2 None -k {POPKEY} -c {{wildcards.chrom}} -s {{wildcards.metric1}} -w {WSIZE} -o {{output}}"
 
 rule calculate_between_population_nucleotide_stats:
     input: "data/ZarrFile/{chrom}/calldata/GT/0.0.0"
-    output: f"nucleotide_stats/{{pop}}.chr{{chrom}}.nbn.{{metric2}}.csv"
-    shell: f"{CONDA}; python scripts/NucStats.py -z data/ZarrFile -p {{wildcards.pop}} -p2 {REFPOP} -k {POPKEY} -c {{wildcards.chrom}} -s {{wildcards.metric2}} -w {WSIZE} -o {{output}}"
+    output: f"nucleotide_stats/{{Pop}}.chr{{chrom}}.nbn.{{metric2}}.csv"
+    shell: f"{CONDA}; python scripts/NucStats.py -z data/ZarrFile -p {{wildcards.Pop}} -p2 {REFPOP} -k {POPKEY} -c {{wildcards.chrom}} -s {{wildcards.metric2}} -w {WSIZE} -o {{output}}"
 
 rule make_polarization_key:
     input: "data/ZarrFile/{chrom}/calldata/GT/0.0.0"
@@ -90,21 +97,21 @@ rule make_polarization_key:
 rule calculate_within_population_haplotype_stats:
     input: "data/ZarrFile/{chrom}/calldata/GT/0.0.0",
            f"accessory/polarization_key.chr{{chrom}}"
-    output: f"haplotype_stats/{{pop}}.chr{{chrom}}.hwn.{{metric3}}.csv"
-    shell: f"{CONDA}; python scripts/HapStats.py -z data/ZarrFile -p {{wildcards.pop}} -p2 None -k {POPKEY} -c {{wildcards.chrom}} -s {{wildcards.metric3}} -o {{output}} -P {{input[1]}} -m {GMAP} --standardize"
+    output: f"haplotype_stats/{{Pop}}.chr{{chrom}}.hwn.{{metric3}}.csv"
+    shell: f"{CONDA}; python scripts/HapStats.py -z data/ZarrFile -p {{wildcards.Pop}} -p2 None -k {POPKEY} -c {{wildcards.chrom}} -s {{wildcards.metric3}} -o {{output}} -P {{input[1]}} -m {GMAP} --standardize"
 
 rule calculate_between_population_haplotype_stats:
     input: "data/ZarrFile/{chrom}/calldata/GT/0.0.0",
            f"accessory/polarization_key.chr{{chrom}}"
-    output: f"haplotype_stats/{{pop}}.chr{{chrom}}.hbn.{{metric4}}.csv"
-    shell: f"{CONDA}; python scripts/HapStats.py -z data/ZarrFile -p {{wildcards.pop}} -p2 {REFPOP} -k {POPKEY} -c {{wildcards.chrom}} -s {{wildcards.metric4}} -o {{output}} -P {{input[1]}} -m {GMAP} --standardize"
+    output: f"haplotype_stats/{{Pop}}.chr{{chrom}}.hbn.{{metric4}}.csv"
+    shell: f"{CONDA}; python scripts/HapStats.py -z data/ZarrFile -p {{wildcards.Pop}} -p2 {REFPOP} -k {POPKEY} -c {{wildcards.chrom}} -s {{wildcards.metric4}} -o {{output}} -P {{input[1]}} -m {GMAP} --standardize"
 
 rule concatenate_results:
     input:
-        expand(f"nucleotide_stats/{{pop}}.chr{{chrom}}.nwn.{{metric1}}.csv", pop=POPS, chrom=CHROMS, metric1=NSTATS['within_pop'].split(",")),
-        expand(f"nucleotide_stats/{{pop}}.chr{{chrom}}.nbn.{{metric2}}.csv", pop=POPS, chrom=CHROMS, metric2=NSTATS['between_pop'].split(",")),
-        expand(f"haplotype_stats/{{pop}}.chr{{chrom}}.hwn.{{metric3}}.csv", pop=POPS, chrom=CHROMS, metric3=HSTATS['within_pop'].split(",")),
-        expand(f"haplotype_stats/{{pop}}.chr{{chrom}}.hbn.{{metric4}}.csv", pop=POPS, chrom=CHROMS, metric4=HSTATS['between_pop'].split(",")),
+        expand(f"nucleotide_stats/{{Pop}}.chr{{chrom}}.nwn.{{metric1}}.csv", Pop=POPS, chrom=CHROMS, metric1=NSTATS['within_pop'].split(",")),
+        expand(f"nucleotide_stats/{{Pop}}.chr{{chrom}}.nbn.{{metric2}}.csv", Pop=POPS, chrom=CHROMS, metric2=NSTATS['between_pop'].split(",")),
+        expand(f"haplotype_stats/{{Pop}}.chr{{chrom}}.hwn.{{metric3}}.csv", Pop=POPS, chrom=CHROMS, metric3=HSTATS['within_pop'].split(",")),
+        expand(f"haplotype_stats/{{Pop}}.chr{{chrom}}.hbn.{{metric4}}.csv", Pop=POPS, chrom=CHROMS, metric4=HSTATS['between_pop'].split(",")),
     output: "AllPops.NucStats.csv.gz", "AllPops.HapStats.csv.gz"
     run:
         shell("for f in nucleotide_stats/*nwn*.csv; do head -n 1 $f > header.csv; done")
@@ -132,27 +139,118 @@ rule concatenate_results:
 # rule simulate_nulls:
 # #     input:
 
-rule extract_singletons:
+# rule extract_singletons:
+#     input: f"data/ZarrFile/{{chrom}}/calldata/GT/0.0.0", f"accessory/polarization_key.chr{{chrom}}"
+#     output: f"multilocus_stats/{{Pop}}.chr{{chrom}}.SDS.sings.gz"#, f"multilocus_stats/{{Pop}}.chr{{chrom}}.SDS.snps.gz"
+#     shell: f"{CONDA}; python scripts/extract_SDS_input.py -z data/ZarrFile -p {{wildcards.Pop}} -k {POPKEY} -c {{wildcards.chrom}} -P {{input[1]}} -o multilocus_stats/{{wildcards.Pop}}.chr{{wildcards.chrom}}.SDS;"
+#             f"gzip multilocus_stats/{{wildcards.Pop}}.chr{{wildcards.chrom}}.SDS.sings; gzip multilocus_stats/{{wildcards.Pop}}.chr{{wildcards.chrom}}.SDS.snps"
+#
+
+checkpoint extract_singletons:
     input: f"data/ZarrFile/{{chrom}}/calldata/GT/0.0.0", f"accessory/polarization_key.chr{{chrom}}"
-    output: f"multilocus_stats/{{pop}}.chr{{chrom}}.SDS.sings.gz", f"multilocus_stats/{{pop}}.chr{{chrom}}.SDS.snps.gz"
-    shell: f"{CONDA}; python scripts/extract_SDS_input.py -z data/ZarrFile -p {{wildcards.pop}} -k {POPKEY} -c {{wildcards.chrom}} -P {{input[1]}} -o multilocus_stats/{{wildcards.pop}}.chr{{wildcards.chrom}}.SDS;"
-            f"gzip multilocus_stats/{{wildcards.pop}}.chr{{wildcards.chrom}}.SDS.sings; gzip multilocus_stats/{{wildcards.pop}}.chr{{wildcards.chrom}}.SDS.snps"
+    output: directory(f"multilocus_stats/{{Pop}}.chr{{chrom}}.SDS") #.sings.gz"#, f"multilocus_stats/{{Pop}}.chr{{chrom}}.SDS.snps.gz"
+    shell: f"mkdir multilocus_stats/{{wildcards.Pop}}.chr{{wildcards.chrom}}.SDS; {CONDA}; python scripts/extract_SDS_input.py -z data/ZarrFile -p {{wildcards.Pop}} -k {POPKEY} -c {{wildcards.chrom}} -P {{input[1]}} -s {config['SDS']['batch_size']} -o multilocus_stats/{{wildcards.Pop}}.chr{{wildcards.chrom}}.SDS/{{wildcards.Pop}}.chr{{wildcards.chrom}}.SDS;"
+           f"gzip multilocus_stats/{{wildcards.Pop}}.chr{{wildcards.chrom}}.SDS/{{wildcards.Pop}}.chr{{wildcards.chrom}}.SDS.sings; " 
+           f"gzip multilocus_stats/{{wildcards.Pop}}.chr{{wildcards.chrom}}.SDS/{{wildcards.Pop}}.chr{{wildcards.chrom}}.SDS.*.snps"
 
 rule calcSDS:
-    input: f"multilocus_stats/{{pop}}.chr{{chrom}}.SDS.sings.gz", f"multilocus_stats/{{pop}}.chr{{chrom}}.SDS.snps.gz"
-    output: f"multilocus_stats/{{pop}}.chr{{chrom}}.SDS.out"
-    params: pre = f"multilocus_stats/{{pop}}.chr{{chrom}}.SDS"
+    input: f"multilocus_stats/{{Pop}}.chr{{chrom}}.SDS/{{Pop}}.chr{{chrom}}.SDS.sings.gz"#, f"multilocus_stats/{{Pop}}.chr{{chrom}}.SDS/{{Pop}}.chr{{chrom}}.{{file_num}}.SDS.snps.gz"
+    output: f"multilocus_stats/{{Pop}}.chr{{chrom}}.SDS/{{Pop}}.chr{{chrom}}.SDS.{{file_num}}.out"
+    params: pre = f"multilocus_stats/{{Pop}}.chr{{chrom}}.SDS/{{Pop}}.chr{{chrom}}.SDS"
     run:
         for gamma in config['SDS']['gamma_shapes'].keys():
-            if wildcards.pop in config['SDS']['gamma_shapes'][gamma]['pops']:
+            if wildcards.Pop in config['SDS']['gamma_shapes'][gamma]['pops']:
                 gamma_file = config['SDS']['gamma_shapes'][gamma]['path']
                 init = config['SDS']['gamma_shapes'][gamma]['init']
         if gamma_file:
-            shell(f"{CONDA}; {config['SDS']['exec']} {{params.pre}}.sings.gz {{params.pre}}.snps.gz {{params.pre}}.obs {{params.pre}}.bound {gamma_file} {init} > {{output}}")
+            shell(f"{CONDA}; {config['SDS']['exec']} {{params.pre}}.sings.gz {{params.pre}}.{{wildcards.file_num}}.snps.gz {{params.pre}}.{{wildcards.file_num}}.obs {{params.pre}}.bound {gamma_file} {init} > {{output}}")
         else:
-            print(f"Did not find gamma shapes path for population: {{wildcards.pop}}")
+            print(f"Did not find gamma shapes path for population: {{wildcards.Pop}}")
 
+def aggregate_SDS(wildcards):
+    checkpoint_output = checkpoints.extract_singletons.get(**wildcards).output[0]
+    inputs = expand(f'multilocus_stats/{wildcards.Pop}.chr{wildcards.chrom}.SDS/{wildcards.Pop}.chr{wildcards.chrom}.SDS.{{file_num}}.out',
+           file_num=glob_wildcards(os.path.join(checkpoint_output, f'{wildcards.Pop}.chr{wildcards.chrom}.SDS.{{i}}.obs')).i)
+    # print(inputs)
+    return inputs
+
+# # generate random number of files
+# checkpoint scatter:
+#     output:
+#         directory('scatter')
+#     shell:
+#         '''
+#         mkdir {output}
+#         N=$(( $RANDOM % 10))
+#         for j in $(seq 1 $N); do echo -n $j > {output}/$j.txt; done
+#         '''
+#
+# # process these unknown number of files
+# rule scatter_copy:
+#     output:
+#         txt = 'scatter_copy/{i}_copy.txt',
+#     input:
+#         txt = 'scatter/{i}.txt',
+#     shell:
+#         '''
+#         cp -f {input.txt} {output.txt}
+#         echo -n "_copy" >> {output.txt}
+#         '''
+# # process scatter_copy output
+# rule scatter_copy_head:
+#     output:
+#         txt = 'scatter_copy_head/{i}_head.txt',
+#     input:
+#         txt = 'scatter_copy/{i}_copy.txt',
+#     shell:
+#         '''
+#         cp -f {input.txt} {output.txt}
+#         echo "_head" >> {output.txt}
+#         '''
+#
+# # collect the results of processing unknown number of files
+# # and merge them together into one file:
+#
+# def aggregate_input(wildcards):
+#     '''
+#     aggregate the file names of the random number of files
+#     generated at the scatter step
+#     '''
+#     checkpoint_output = checkpoints.scatter.get(**wildcards).output[0]
+#     return expand('scatter_copy_head/{i}_head.txt',
+#            i=glob_wildcards(os.path.join(checkpoint_output, '{i}.txt')).i)
+#
+# rule scatter_copy_head_collect:
+#     output:
+#         combined = 'scatter_copy_head_collect/all.txt',
+#     input:
+#         aggregate_input
+#     shell:
+#         '''
+#         cat {input} > {output.combined}
+#         '''
+
+# rule calcSDS:
+#     input: f"multilocus_stats/{{Pop}}.chr{{chrom}}.SDS.sings.gz"#, f"multilocus_stats/{{Pop}}.chr{{chrom}}.{{file_num}}.SDS.snps.gz"
+#     output: f"multilocus_stats/{{Pop}}.chr{{chrom}}.{{file_num}}.SDS.out"
+#     params: pre = f"multilocus_stats/{{Pop}}.chr{{chrom}}.SDS"
+#     run:
+#         for gamma in config['SDS']['gamma_shapes'].keys():
+#             if wildcards.Pop in config['SDS']['gamma_shapes'][gamma]['pops']:
+#                 gamma_file = config['SDS']['gamma_shapes'][gamma]['path']
+#                 init = config['SDS']['gamma_shapes'][gamma]['init']
+#         if gamma_file:
+#             shell(f"{CONDA}; {config['SDS']['exec']} {{params.pre}}.sings.gz {{params.pre}}.{{wildcards.file_num}}.snps.gz {{params.pre}}.obs {{params.pre}}.bound {gamma_file} {init} > {{output}}")
+#         else:
+#             print(f"Did not find gamma shapes path for population: {{wildcards.Pop}}")
+
+rule catSDS:
+    input: aggregate_SDS
+    output: f"multilocus_stats/{{Pop}}.chr{{chrom}}.SDS.out"
+    shell: 'head -n 1 {input[0]} > head.txt; tail -q -n +2 {input} > tail.txt; cat head.txt tail.txt > {output}; rm head.txt; rm tail.txt'
+
+#NOT FINISHED.  Need to label with population.
 rule callSDS:
-    input: expand(f"multilocus_stats/{{pop}}.chr{{chrom}}.SDS.out", pop=POPS, chrom=CHROMS)
+    input: expand(f"multilocus_stats/{{Pop}}.chr{{chrom}}.SDS.out", Pop=POPS, chrom=CHROMS)
     output: ".SDS.txt"
     shell: "touch ./.SDS.txt"

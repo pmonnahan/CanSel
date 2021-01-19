@@ -4,8 +4,7 @@ __default__:
   p: 'ccgg'
   job-name: "{rule}"
   time: "4:00:00"
-  mem-per-cpu: "5G"
-  ntasks: "1"
+  mem: "5G"
   nodes: "1"
   mail-user: "pmonnaha@umn.edu"
   mail-type: "NONE"
@@ -14,36 +13,40 @@ __default__:
 
 convert_vcf:
   time: '24:00:00'
-  mem-per-cpu: '4gb'
-  ntasks: "1"
+  mem: '4gb'
   nodes: "1"
 
 make_polarization_key:
   time: '24:00:00'
-  mem-per-cpu: '4gb'
-  ntasks: "1"
+  mem: '4gb'
   nodes: "1"
 
 calculate_within_population_nucleotide_stats:
   time: '24:00:00'
-  mem-per-cpu: '4gb'
-  ntasks: "1"
+  mem: '4gb'
   nodes: "1"
 
 calculate_between_population_nucleotide_stats:
   time: '02:00:00'
-  mem-per-cpu: '8gb'
-  ntasks: "1"
+  mem: '8gb'
   nodes: "1"
 
 calculate_within_population_haplotype_stats:
   time: '02:00:00'
-  mem-per-cpu: '8gb'
-  ntasks: "1"
+  mem: '8gb'
   nodes: "1"
 
 calculate_between_population_haplotype_stats:
   time: '02:00:00'
-  mem-per-cpu: '8gb'
-  ntasks: "1"
+  mem: '8gb'
   nodes: "1"
+
+calcSDS:
+  time: '12:00:00'
+  mem: '16gb'
+  nodes: '1'
+
+extract_singletons:
+  time: '16:00:00'
+  mem: '8gb'
+  nodes: '1'
